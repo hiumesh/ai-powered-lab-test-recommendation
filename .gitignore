@@ -4,5 +4,5 @@ trash/
 .env
 __pycache__
 app.log
-data/
+data/chroma_db/
 output/

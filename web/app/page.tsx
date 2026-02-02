@@ -168,14 +168,13 @@ export default function Home() {
     };
 
     try {
-      const response = await fetch(
-        "http://localhost:8000/recommend-tests/stream",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        },
-      );
+      const apiBaseUrl =
+        process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+      const response = await fetch(`${apiBaseUrl}/recommend-tests/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
       if (!response.ok) throw new Error("Network response was not ok");
       if (!response.body) throw new Error("No response body");
@@ -290,7 +289,6 @@ export default function Home() {
     setCurrentStep("");
   };
 
-  console.log(streamData);
   return (
     <div className="h-screen bg-slate-50 dark:bg-slate-950 p-2 md:p-4 font-sans">
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-1 gap-2 h-[calc(100vh-2rem)]">

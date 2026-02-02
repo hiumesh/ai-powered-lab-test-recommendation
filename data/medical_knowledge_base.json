@@ -1,0 +1,30 @@
+[
+  {
+    "category": "Hematology",
+    "content": "When a patient presents with Low Hemoglobin (Anemia) and symptoms like fatigue, pale skin, or shortness of breath. Recommended follow-up tests include: Iron Studies (Ferritin, Serum Iron), Vitamin B12 and Folate levels, and a Reticulocyte Count to assess bone marrow function."
+  },
+  {
+    "category": "Endocrinology",
+    "content": "For High Glucose levels or suspected Diabetes (HbA1c > 5.7%) accompanied by increased thirst (polydipsia), frequent urination (polyuria), or unexplained weight loss. Recommended follow-up tests: Fasting Plasma Glucose, Oral Glucose Tolerance Test (OGTT), and a Lipid Panel to assess cardiovascular risk."
+  },
+  {
+    "category": "Endocrinology",
+    "content": "In cases of Abnormal TSH (Thyroid Stimulating Hormone) with symptoms of fatigue, weight changes, or hair loss. Recommended follow-up tests: Free T4, Free T3, and Thyroid Peroxidase Antibodies (TPOAb) to screen for autoimmune thyroid diseases like Hashimoto's or Graves'."
+  },
+  {
+    "category": "Cardiology",
+    "content": "If Cholesterol is High (> 200 mg/dL) or LDL is elevated, often asymptomatic but may have chest discomfort or xanthelasma. Recommended follow-up tests: Full Lipid Panel (including Triglycerides, HDL, LDL), Lipoprotein(a), and High-sensitivity CRP (hs-CRP) to evaluate inflammation."
+  },
+  {
+    "category": "Nephrology",
+    "content": "For Elevated Creatinine or BUN suggesting kidney dysfunction, often associated with edema (swelling), fatigue, or foamy urine. Recommended follow-up tests: Urinalysis (checks for protein/blood), Urine Albumin-to-Creatinine Ratio (UACR), and Estimated Glomerular Filtration Rate (eGFR)."
+  },
+  {
+    "category": "Hepatology",
+    "content": "When Liver Enzymes (ALT/AST) are elevated, potentially causing jaundice, abdominal pain, or nausea. Recommended follow-up tests: Hepatitis Viral Panel (A, B, C), GGT (Gamma-Glutamyl Transferase), and Liver Ultrasound to check for fatty liver or obstruction."
+  },
+  {
+    "category": "General",
+    "content": "For generalized high inflammation markers (ESR or CRP) with non-specific symptoms like joint pain, fever, or fatigue. Recommended follow-up tests: ANA (Antinuclear Antibody) screen for autoimmune conditions, Rheumatoid Factor (RF), and CBC to check for infection."
+  }
+]
