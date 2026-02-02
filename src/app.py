@@ -104,7 +104,7 @@ app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 @app.post("/recommend-tests", response_model=RecommendationOutput)
 @limiter.limit(config.get("app.rate_limit", "10/minute"))
 async def recommend_tests(request: Request, patient_data: PatientInput):
-    
+
     request_id = getattr(request.state, "request_id", str(uuid.uuid4()))
 
     if not app_graph:
@@ -125,7 +125,16 @@ async def recommend_tests(request: Request, patient_data: PatientInput):
         result = await app_graph.ainvoke(GraphState(**state_input), config=graph_config)
 
         if result.get("error"):
-            raise HTTPException(status_code=500, detail=result["error"])
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "recommendations": result.get("recommendations", []),
+                    "overall_reasoning": result.get(
+                        "reasoning", f"Error: {result['error']}"
+                    ),
+                    "error": result["error"],
+                },
+            )
 
         result = RecommendationOutput(
             recommendations=result.get("recommendations", []),
@@ -141,7 +150,10 @@ async def recommend_tests(request: Request, patient_data: PatientInput):
         raise
     except Exception as e:
         logger.error(f"Error processing request: {e}", extra={"request_id": request_id})
-        raise HTTPException(status_code=500, detail=str(e))
+        raise JSONResponse(
+            status_code=500,
+            content={"error": str(e)},
+        )
 
 
 @app.post("/recommend-tests/stream")
@@ -159,7 +171,9 @@ async def recommend_tests_stream(request: Request, patient_data: PatientInput):
         if recommendation_cache:
             cached_result = recommendation_cache.get(patient_data)
             if cached_result:
-                logger.info("Cache hit for streaming request", extra={"request_id": request_id})
+                logger.info(
+                    "Cache hit for streaming request", extra={"request_id": request_id}
+                )
                 data = (
                     cached_result.dict()
                     if hasattr(cached_result, "dict")
@@ -170,7 +184,7 @@ async def recommend_tests_stream(request: Request, patient_data: PatientInput):
                 yield "data: [DONE]\n\n"
                 return
 
-        accumulated_data = {"recommendations": [], "reasoning": ""}
+        accumulated_data = {"recommendations": [], "reasoning": "", "error": None}
 
         try:
             state_input = patient_data.model_dump()
@@ -178,22 +192,22 @@ async def recommend_tests_stream(request: Request, patient_data: PatientInput):
 
             graph_config = RunnableConfig(configurable={"thread_id": request_id})
 
-           
             async for event in app_graph.astream_events(
                 GraphState(**state_input), config=graph_config, version="v2"
             ):
                 event_type = event.get("event")
                 node_name = event.get("name")
-                
+
                 target_nodes = {
                     "validate_input",
                     "retrieve_context",
                     "generate_recommendations",
-                    "format_output"
+                    "format_output",
+                    "error_handler",
                 }
 
                 if node_name in target_nodes:
-                    
+
                     if event_type == "on_chain_start":
                         payload = {"step": node_name, "data": {}}
                         yield f"data: {json.dumps(payload)}\n\n"
@@ -201,25 +215,27 @@ async def recommend_tests_stream(request: Request, patient_data: PatientInput):
                     elif event_type == "on_chain_end":
                         output = event.get("data", {}).get("output")
                         if output and isinstance(output, dict):
-                             
-                             payload = {"step": node_name, "data": {}}
-            
-                             
-                             if "reasoning" in output:
-                                 payload["data"]["reasoning"] = output["reasoning"]
-                                 accumulated_data["reasoning"] = output["reasoning"]
-                             if "recommendations" in output:
-                                 payload["data"]["recommendations"] = output["recommendations"]
-                                 accumulated_data["recommendations"] = output["recommendations"]
-                             if "error" in output and output["error"]:
-                                 payload["data"]["error"] = output["error"]
-                             
-                             if payload["data"]:
-                                 yield f"data: {json.dumps(payload)}\n\n"
 
-            if recommendation_cache and (
-                accumulated_data["recommendations"] or accumulated_data["reasoning"]
-            ):
+                            payload = {"step": node_name, "data": {}}
+
+                            if "reasoning" in output:
+                                payload["data"]["reasoning"] = output["reasoning"]
+                                accumulated_data["reasoning"] = output["reasoning"]
+                            if "recommendations" in output:
+                                payload["data"]["recommendations"] = output[
+                                    "recommendations"
+                                ]
+                                accumulated_data["recommendations"] = output[
+                                    "recommendations"
+                                ]
+                            if "error" in output and output["error"]:
+                                payload["data"]["error"] = output["error"]
+                                accumulated_data["error"] = output["error"]
+
+                            if payload["data"]:
+                                yield f"data: {json.dumps(payload)}\n\n"
+
+            if recommendation_cache and not accumulated_data.get("error"):
 
                 output = RecommendationOutput(
                     recommendations=accumulated_data["recommendations"],

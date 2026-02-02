@@ -202,13 +202,19 @@ export default function Home() {
             try {
               const parsed = JSON.parse(jsonStr);
 
-              if (parsed.error) {
+              if (parsed.error && !parsed.step) {
                 setError(parsed.error);
                 setIsStreaming(false);
                 return;
               }
 
               if (parsed.step) {
+                if (parsed.step === "error_handler" && parsed.data?.error) {
+                  setError(parsed.data.error);
+                  setIsStreaming(false);
+                  return;
+                }
+
                 setCurrentStep(stepMessages[parsed.step] || parsed.step);
 
                 if (
@@ -216,6 +222,12 @@ export default function Home() {
                   parsed.step === "format_output"
                 ) {
                   const chunkData = parsed.data;
+
+                  if (chunkData?.error) {
+                    console.warn("Skipping chunk with error:", chunkData.error);
+                    continue;
+                  }
+
                   setStreamData((prev) => {
                     const newData = { ...prev };
                     if (chunkData.recommendations) {

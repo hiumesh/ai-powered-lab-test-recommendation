@@ -16,6 +16,7 @@ graph:
   llm:
     provider: "openai"
     model: "gpt-4o"
+    max_retries: 3
   k_retrieval: 5
 
 logging:

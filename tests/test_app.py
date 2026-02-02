@@ -106,13 +106,14 @@ def test_health_check():
 
 
 def test_request_id_in_response():
-   
+
     response = client.get("/health")
     assert response.status_code == 200
     assert "X-Request-ID" in response.headers
     request_id = response.headers["X-Request-ID"]
-   
+
     import uuid
+
     try:
         uuid.UUID(request_id)
     except ValueError:
@@ -386,3 +387,92 @@ async def test_valid_edge_cases(initialized_app):
     data = response.json()
     assert "recommendations" in data
     assert len(data["recommendations"]) >= 3
+
+
+@pytest.mark.asyncio
+async def test_retry_logic_increments_counter():
+
+    from src.graph import LabTestRecommendationGraphBuilder, GraphState
+    from src.utils.chroma_vector_db import ChromaVectorDB
+    from src.config import config
+
+    vector_db = ChromaVectorDB(config)
+    vector_store = vector_db.build()
+    builder = LabTestRecommendationGraphBuilder(
+        vector_store=vector_store, config=config
+    )
+
+    state: GraphState = {
+        "age": 30,
+        "gender": "M",
+        "abnormal_tests": ["High WBC: 15000/μL"],
+        "symptoms": "fever",
+        "retrieved_context": [],
+        "request_id": "test-retry-id",
+        "retry_count": 0,
+        "error": None,
+        "should_retry": False,
+        "recommendations": [],
+        "confidence_scores": {},
+        "reasoning": "",
+    }
+
+    with patch("src.graph.ChatPromptTemplate") as mock_prompt_cls:
+        mock_prompt = MagicMock()
+        mock_prompt_cls.from_messages.return_value = mock_prompt
+        mock_chain = MagicMock()
+        mock_prompt.__or__.return_value = mock_chain
+
+        mock_chain.invoke.side_effect = Exception("API Error")
+
+        result_state = builder._generate_recommendations_node(state)
+
+        error_msg = result_state.get("error")
+        assert error_msg is not None
+        assert "LLM generation error" in error_msg
+        assert result_state.get("should_retry") is True
+        assert result_state.get("retry_count") == 1
+
+
+@pytest.mark.asyncio
+async def test_retry_logic_routing():
+
+    from src.graph import LabTestRecommendationGraphBuilder, GraphState
+    from src.utils.chroma_vector_db import ChromaVectorDB
+    from src.config import config
+
+    vector_db = ChromaVectorDB(config)
+    vector_store = vector_db.build()
+    builder = LabTestRecommendationGraphBuilder(
+        vector_store=vector_store, config=config
+    )
+    builder.max_retries = 3
+
+    state_retry: GraphState = {
+        "error": "Some error",
+        "should_retry": True,
+        "retry_count": 2,
+        "request_id": "test",
+    }
+    decision = builder._should_retry(state_retry)
+    assert decision == "retry", "Should retry when retry_count <= max_retries"
+
+    state_exceeded: GraphState = {
+        "error": "Some error",
+        "should_retry": True,
+        "retry_count": 4,
+        "request_id": "test",
+    }
+    decision = builder._should_retry(state_exceeded)
+    assert (
+        decision == "error_handler"
+    ), "Should not retry when retry_count > max_retries"
+
+    state_no_error: GraphState = {
+        "error": None,
+        "should_retry": False,
+        "retry_count": 0,
+        "request_id": "test",
+    }
+    decision = builder._should_retry(state_no_error)
+    assert decision == "next_step", "Should proceed to next step when no error"

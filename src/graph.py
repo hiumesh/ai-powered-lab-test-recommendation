@@ -27,7 +27,6 @@ class PatientInput(BaseModel):
     @field_validator("gender")
     @classmethod
     def normalize_gender(cls, v: str) -> str:
-        """Normalize gender to M or F."""
         gender_upper = v.upper()
         if gender_upper in ["M", "MALE"]:
             return "M"
@@ -39,7 +38,6 @@ class PatientInput(BaseModel):
     @field_validator("abnormal_tests")
     @classmethod
     def validate_tests_not_empty(cls, v: List[str]) -> List[str]:
-        """Ensure test list is not empty."""
         if not v or len(v) == 0:
             raise ValueError("At least one abnormal test is required")
         return v
@@ -77,7 +75,6 @@ class RecommendationOutput(BaseModel):
     def validate_recommendation_count(
         cls, v: List[TestRecommendation]
     ) -> List[TestRecommendation]:
-        """Ensure 3-5 recommendations (ideal range)."""
         if len(v) < 3:
             raise ValueError(f"Expected at least 3 recommendations, got {len(v)}")
         if len(v) > 5:
@@ -98,9 +95,9 @@ class GraphState(TypedDict):
     confidence_scores: Dict[str, float]
     reasoning: str
 
-
     error: Optional[str]
     should_retry: bool
+    retry_count: int
 
     request_id: Optional[str]
 
@@ -116,13 +113,16 @@ class LabTestRecommendationGraphBuilder:
         self.vector_store = vector_store
         self.config = config
         self.k_retrieval = config.get("graph.k_retrieval", 5)
-        
+
         llm_provider = config.get("graph.llm.provider", "openai")
         llm_model = config.get("graph.llm.model", "gpt-4o")
-        
+        self.max_retries = config.get("graph.llm.max_retries", 3)
+
         if llm_provider == "gemini":
             logger.info("Using Gemini LLM")
-            self.llm = ChatGoogleGenerativeAI(model=llm_model, temperature=0, convert_system_message_to_human=True)
+            self.llm = ChatGoogleGenerativeAI(
+                model=llm_model, temperature=0, convert_system_message_to_human=True
+            )
         else:
             logger.info("Using OpenAI LLM")
             self.llm = ChatOpenAI(model=llm_model, temperature=0)
@@ -152,6 +152,7 @@ class LabTestRecommendationGraphBuilder:
 
             state["error"] = None
             state["should_retry"] = False
+            state["retry_count"] = 0
 
             logger.info("Input validation successful", extra={"request_id": request_id})
             return state
@@ -165,17 +166,24 @@ class LabTestRecommendationGraphBuilder:
                 error_messages.append(f"{field}: {msg}")
 
             state["error"] = f"Validation error: {'; '.join(error_messages)}"
-            logger.error(f"Validation failed: {state['error']}", extra={"request_id": request_id})
+            logger.error(
+                f"Validation failed: {state['error']}", extra={"request_id": request_id}
+            )
             return state
 
         except Exception as e:
             state["error"] = f"Validation error: {str(e)}"
-            logger.error(f"Validation error: {str(e)}", extra={"request_id": request_id})
+            logger.error(
+                f"Validation error: {str(e)}", extra={"request_id": request_id}
+            )
             return state
 
     def _retrieve_context_node(self, state: GraphState) -> GraphState:
         request_id = state.get("request_id", "")
-        logger.info("Retrieving context from vector database...", extra={"request_id": request_id})
+        logger.info(
+            "Retrieving context from vector database...",
+            extra={"request_id": request_id},
+        )
 
         try:
             abnormal_tests_text = " ".join(state["abnormal_tests"])
@@ -205,11 +213,17 @@ class LabTestRecommendationGraphBuilder:
 
             state["retrieved_context"] = context_list
 
-            logger.info(f"Retrieved {len(context_list)} relevant test documents", extra={"request_id": request_id})
+            logger.info(
+                f"Retrieved {len(context_list)} relevant test documents",
+                extra={"request_id": request_id},
+            )
             return state
         except Exception as e:
             state["error"] = f"Context retrieval error: {str(e)}"
-            logger.error(f"Context retrieval failed: {state['error']}", extra={"request_id": request_id})
+            logger.error(
+                f"Context retrieval failed: {state['error']}",
+                extra={"request_id": request_id},
+            )
             return state
 
     def _generate_recommendations_node(self, state: GraphState):
@@ -381,10 +395,13 @@ REMEMBER:
                 confidence_scores[rec.test_name] = rec.confidence
             state["confidence_scores"] = confidence_scores
 
-            logger.info(f"Generated {len(state['recommendations'])} recommendations", extra={"request_id": request_id})
+            logger.info(
+                f"Generated {len(state['recommendations'])} recommendations",
+                extra={"request_id": request_id},
+            )
             logger.info(
                 f"Average confidence: {sum(confidence_scores.values()) / len(confidence_scores):.2f}",
-                extra={"request_id": request_id}
+                extra={"request_id": request_id},
             )
 
             return state
@@ -399,13 +416,21 @@ REMEMBER:
 
             state["error"] = f"LLM output validation error: {'; '.join(error_messages)}"
             state["should_retry"] = True
-            logger.error(f"LLM output validation failed: {state['error']}", extra={"request_id": request_id})
+            state["retry_count"] = state.get("retry_count", 0) + 1
+            logger.error(
+                f"LLM output validation failed (Attempt {state['retry_count']}/{self.max_retries}): {state['error']}",
+                extra={"request_id": request_id},
+            )
             return state
 
         except Exception as e:
             state["error"] = f"LLM generation error: {str(e)}"
             state["should_retry"] = True
-            logger.error(f"LLM generation failed: {state['error']}", extra={"request_id": request_id})
+            state["retry_count"] = state.get("retry_count", 0) + 1
+            logger.error(
+                f"LLM generation failed (Attempt {state['retry_count']}/{self.max_retries}): {state['error']}",
+                extra={"request_id": request_id},
+            )
             return state
 
     def _format_output_node(self, state: GraphState) -> GraphState:
@@ -434,24 +459,34 @@ REMEMBER:
                     "Recommendations generated based on patient data and medical knowledge base."
                 )
 
-            logger.info("Output formatted successfully", extra={"request_id": request_id})
-            logger.info(f"Total recommendations: {len(state['recommendations'])}", extra={"request_id": request_id})
+            logger.info(
+                "Output formatted successfully", extra={"request_id": request_id}
+            )
+            logger.info(
+                f"Total recommendations: {len(state['recommendations'])}",
+                extra={"request_id": request_id},
+            )
             logger.info(
                 f"Average confidence: {sum(state['confidence_scores'].values()) / len(state['confidence_scores']):.2f}",
-                extra={"request_id": request_id}
+                extra={"request_id": request_id},
             )
 
             return state
 
         except Exception as e:
             state["error"] = f"Output formatting error: {str(e)}"
-            logger.error(f"Formatting failed: {state['error']}", extra={"request_id": request_id})
+            logger.error(
+                f"Formatting failed: {state['error']}", extra={"request_id": request_id}
+            )
             return state
 
     def _handle_error_node(self, state: GraphState) -> GraphState:
-       
+
         request_id = state.get("request_id", "")
-        logger.error(f"Error occurred: {state.get('error', 'Unknown error')}", extra={"request_id": request_id})
+        logger.error(
+            f"Error occurred: {state.get('error', 'Unknown error')}",
+            extra={"request_id": request_id},
+        )
 
         state["recommendations"] = []
         state["reasoning"] = f"Error: {state.get('error', 'Unknown error')}"
@@ -467,7 +502,13 @@ REMEMBER:
     def _should_retry(self, state: GraphState) -> str:
         if state.get("error"):
             if state.get("should_retry", False):
-                return "error_handler"
+                if state.get("retry_count", 0) <= self.max_retries:
+                    logger.info(
+                        f"Retrying based on policy (Attempt {state.get('retry_count')} allowed)",
+                        extra={"request_id": state.get("request_id", "")},
+                    )
+                    return "retry"
+
             return "error_handler"
         return "next_step"
 
@@ -502,7 +543,11 @@ REMEMBER:
         workflow.add_conditional_edges(
             "generate_recommendations",
             self._should_retry,
-            {"next_step": "format_output", "error_handler": "error_handler"},
+            {
+                "next_step": "format_output",
+                "retry": "generate_recommendations",
+                "error_handler": "error_handler",
+            },
         )
 
         workflow.add_conditional_edges("format_output", self._should_end, {END: END})
