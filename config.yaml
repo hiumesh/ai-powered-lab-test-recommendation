@@ -1,0 +1,35 @@
+app:
+  rate_limit: "10/minute"
+
+cache:
+  max_size: 100
+
+vector_db:
+  path: "data/chroma_db"
+  data_path: "data/medical_knowledge_base.json"
+  collection_name: "medical_knowledge_base"
+  embedding:
+    provider: "openai"
+    model: "text-embedding-3-small"
+
+graph:
+  llm:
+    provider: "openai"
+    model: "gpt-4o"
+  k_retrieval: 5
+
+logging:
+  version: 1
+  disable_existing_loggers: True
+  formatters:
+    standard:
+      format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  handlers:
+    console:
+      class: logging.StreamHandler
+      level: INFO
+      formatter: standard
+      stream: "ext://sys.stdout"
+  root:
+    level: INFO
+    handlers: [console]

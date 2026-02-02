@@ -1,0 +1,14 @@
+fastapi[standard]
+langchain
+langsmith
+langchain-openai
+langchain-google-genai
+langchain-chroma
+chromadb
+python-dotenv
+pydantic
+slowapi
+PyYAML
+pytest
+httpx
+pytest-asyncio

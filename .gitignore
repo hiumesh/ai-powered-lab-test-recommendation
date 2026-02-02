@@ -1,0 +1,8 @@
+examples/
+trash/
+.venv
+.env
+__pycache__
+app.log
+data/
+output/
