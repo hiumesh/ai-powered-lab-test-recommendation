@@ -150,7 +150,7 @@ async def recommend_tests(request: Request, patient_data: PatientInput):
         raise
     except Exception as e:
         logger.error(f"Error processing request: {e}", extra={"request_id": request_id})
-        raise JSONResponse(
+        return JSONResponse(
             status_code=500,
             content={"error": str(e)},
         )

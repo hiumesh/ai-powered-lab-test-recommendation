@@ -1,7 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import {
+  useForm,
+  useFieldArray,
+  Controller,
+  type Resolver,
+} from "react-hook-form";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
@@ -90,8 +96,10 @@ export default function Home() {
   // Ref for auto-scrolling the reasoning text
   const reasoningEndRef = useRef<HTMLDivElement>(null);
 
-  const form = useForm({
-    resolver: zodResolver(patientSchema),
+  const form = useForm<PatientFormValues>({
+    resolver: zodResolver(
+      patientSchema,
+    ) as unknown as Resolver<PatientFormValues>,
     defaultValues: {
       age: 45,
       gender: "M",
@@ -330,40 +338,60 @@ export default function Home() {
               <CardContent className="space-y-6 pt-2">
                 <form
                   id="recommendation-form"
-                  onSubmit={form.handleSubmit((data) => onSubmit(data))}
+                  onSubmit={form.handleSubmit((data: PatientFormValues) =>
+                    onSubmit(data),
+                  )}
                   className="space-y-6"
                 >
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="age">Age</Label>
-                      <Input
-                        id="age"
-                        type="number"
-                        {...form.register("age")}
-                        className="bg-slate-50 border-slate-200"
+                      <Controller
+                        name="age"
+                        control={form.control}
+                        render={({ field, fieldState }) => (
+                          <Field data-invalid={fieldState.invalid}>
+                            <FieldLabel htmlFor="age">Age</FieldLabel>
+                            <Input
+                              id="age"
+                              type="number"
+                              {...field}
+                              aria-invalid={fieldState.invalid}
+                            />
+                            {fieldState.invalid && (
+                              <FieldError errors={[fieldState.error]} />
+                            )}
+                          </Field>
+                        )}
                       />
-                      {form.formState.errors.age && (
-                        <p className="text-xs text-red-500">
-                          {form.formState.errors.age.message}
-                        </p>
-                      )}
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="gender">Gender</Label>
-                      <Select
-                        onValueChange={(val) =>
-                          form.setValue("gender", val as "M" | "F")
-                        }
-                        defaultValue={form.getValues("gender")}
-                      >
-                        <SelectTrigger className="bg-slate-50 border-slate-200">
-                          <SelectValue placeholder="Select" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="M">Male</SelectItem>
-                          <SelectItem value="F">Female</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Controller
+                        name="gender"
+                        control={form.control}
+                        render={({ field, fieldState }) => (
+                          <Field data-invalid={fieldState.invalid}>
+                            <FieldLabel htmlFor="gender">Gender</FieldLabel>
+                            <Select
+                              onValueChange={(val) => field.onChange(val)}
+                              value={field.value}
+                              defaultValue={field.value}
+                            >
+                              <SelectTrigger
+                                className={`bg-slate-50 ${fieldState.invalid ? "border-red-500" : "border-slate-200"}`}
+                              >
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="M">Male</SelectItem>
+                                <SelectItem value="F">Female</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {fieldState.invalid && (
+                              <FieldError errors={[fieldState.error]} />
+                            )}
+                          </Field>
+                        )}
+                      />
                     </div>
                   </div>
 
@@ -384,30 +412,50 @@ export default function Home() {
                     </div>
                     <div className="space-y-2">
                       {testFields.map((field, index) => (
-                        <div key={field.id} className="flex gap-2">
-                          <Input
-                            {...form.register(
-                              `abnormal_tests.${index}.value` as const,
+                        <div key={field.id} className="flex flex-col gap-1">
+                          <div className="flex gap-2 flex-1">
+                            <Controller
+                              name={`abnormal_tests.${index}.value` as const}
+                              control={form.control}
+                              render={({ field: f, fieldState }) => (
+                                <Field
+                                  className="flex-1"
+                                  data-invalid={fieldState.invalid}
+                                >
+                                  <Input
+                                    {...f}
+                                    placeholder="e.g. Hemoglobin 8.5 g/dL"
+                                    className={`bg-slate-50 text-sm ${fieldState.invalid ? "border-red-500 focus:border-red-500" : "border-slate-200"}`}
+                                    aria-invalid={fieldState.invalid}
+                                    aria-describedby={
+                                      fieldState.invalid
+                                        ? `abnormal_test_${index}_error`
+                                        : undefined
+                                    }
+                                  />
+                                  {fieldState.invalid && (
+                                    <FieldError errors={[fieldState.error]} />
+                                  )}
+                                </Field>
+                              )}
+                            />
+
+                            {testFields.length > 1 && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeTest(index)}
+                                className="shrink-0 text-slate-400 hover:text-red-500"
+                              >
+                                <XIcon className="w-4 h-4" />
+                              </Button>
                             )}
-                            placeholder="e.g. Hemoglobin 8.5 g/dL"
-                            className="bg-slate-50 border-slate-200 text-sm"
-                          />
-                          {testFields.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeTest(index)}
-                              className="shrink-0 text-slate-400 hover:text-red-500"
-                            >
-                              <XIcon className="w-4 h-4" />
-                            </Button>
-                          )}
+                          </div>
                         </div>
                       ))}
                       {form.formState.errors.abnormal_tests && (
                         <p className="text-xs text-red-500 flex items-center gap-1">
-                          <WarningCircleIcon className="w-3 h-3" />
                           {form.formState.errors.abnormal_tests.message}
                         </p>
                       )}
@@ -431,25 +479,46 @@ export default function Home() {
                     </div>
                     <div className="space-y-2">
                       {symptomFields.map((field, index) => (
-                        <div key={field.id} className="flex gap-2">
-                          <Input
-                            {...form.register(
-                              `symptoms.${index}.value` as const,
+                        <div key={field.id} className="flex flex-col gap-1">
+                          <div className="flex gap-2 flex-1">
+                            <Controller
+                              name={`symptoms.${index}.value` as const}
+                              control={form.control}
+                              render={({ field: f, fieldState }) => (
+                                <Field
+                                  className="flex-1"
+                                  data-invalid={fieldState.invalid}
+                                >
+                                  <Input
+                                    {...f}
+                                    placeholder="e.g. Fatigue, Dizziness"
+                                    className={`bg-slate-50 text-sm ${fieldState.invalid ? "border-red-500 focus:border-red-500" : "border-slate-200"}`}
+                                    aria-invalid={fieldState.invalid}
+                                    aria-describedby={
+                                      fieldState.invalid
+                                        ? `symptom_${index}_error`
+                                        : undefined
+                                    }
+                                  />
+                                  {fieldState.invalid && (
+                                    <FieldError errors={[fieldState.error]} />
+                                  )}
+                                </Field>
+                              )}
+                            />
+
+                            {symptomFields.length > 1 && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeSymptom(index)}
+                                className="shrink-0 text-slate-400 hover:text-red-500"
+                              >
+                                <XIcon className="w-4 h-4" />
+                              </Button>
                             )}
-                            placeholder="e.g. Fatigue, Dizziness"
-                            className="bg-slate-50 border-slate-200 text-sm"
-                          />
-                          {symptomFields.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeSymptom(index)}
-                              className="shrink-0 text-slate-400 hover:text-red-500"
-                            >
-                              <XIcon className="w-4 h-4" />
-                            </Button>
-                          )}
+                          </div>
                         </div>
                       ))}
                     </div>
