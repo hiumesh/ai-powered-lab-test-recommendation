@@ -2,7 +2,7 @@
   "test_cases": [
     {
       "source_file": "case1.txt",
-      "patient_name": "HAMDAN SAIF AL RUBAIE",
+      "patient_name": "Patient 1",
       "api_input": {
         "age": 69,
         "gender": "male",
@@ -19,7 +19,7 @@
     },
     {
       "source_file": "case12.txt",
-      "patient_name": "HAMDAN SAIF AL RUBAIE",
+      "patient_name": "Patient 2",
       "api_input": {
         "age": 69,
         "gender": "male",
@@ -34,7 +34,7 @@
     },
     {
       "source_file": "case2.txt",
-      "patient_name": "HAMDAN SAIF AL RUBAIE",
+      "patient_name": "Patient 3",
       "api_input": {
         "age": 69,
         "gender": "male",
@@ -51,7 +51,7 @@
     },
     {
       "source_file": "case3.txt",
-      "patient_name": "HAMDAN SAIF AL RUBAIE",
+      "patient_name": "Patient 4",
       "api_input": {
         "age": 69,
         "gender": "male",
@@ -68,7 +68,7 @@
     },
     {
       "source_file": "case4.txt",
-      "patient_name": "HAMDAN SAIF AL RUBAIE",
+      "patient_name": "Patient 5",
       "api_input": {
         "age": 69,
         "gender": "male",
@@ -85,7 +85,7 @@
     },
     {
       "source_file": "case5.txt",
-      "patient_name": "HAMDAN SAIF AL RUBAIE",
+      "patient_name": "Patient 6",
       "api_input": {
         "age": 69,
         "gender": "male",
