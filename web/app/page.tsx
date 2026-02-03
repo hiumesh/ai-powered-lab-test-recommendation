@@ -1,79 +1,28 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import {
-  useForm,
-  useFieldArray,
-  Controller,
-  type Resolver,
-} from "react-hook-form";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  ArrowCounterClockwiseIcon,
-  PlusIcon,
-  SparkleIcon,
-  WarningCircleIcon,
-  XIcon,
+  ClockCounterClockwiseIcon,
+  ArrowLeftIcon,
 } from "@phosphor-icons/react";
-
-const patientSchema = z.object({
-  age: z.coerce
-    .number()
-    .min(0, "Age must be valid")
-    .max(120, "Age must be valid"),
-  gender: z.enum(["M", "F"]),
-  abnormal_tests: z
-    .array(z.object({ value: z.string().min(1, "Test result required") }))
-    .min(1, "At least one abnormal test is required"),
-  symptoms: z.array(
-    z.object({ value: z.string().min(1, "Symptom description required") }),
-  ),
-});
+import { Badge } from "@/components/ui/badge";
+import { patientSchema } from "./zod-schema";
+import SessionHistory from "./session-history";
+import AnalysisResult from "./analysis-result";
+import FormColumn from "./form-column";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 
 type PatientFormValues = z.infer<typeof patientSchema>;
-
-type Recommendation = {
-  test_name: string;
-  reasoning: string;
-  confidence: number;
-  priority: string;
-  clinical_indication: string;
-};
-
-type AnalysisResult = {
-  recommendations: Recommendation[];
-  reasoning: string;
-  error?: string;
-};
-
-type HistoryItem = {
-  id: string;
-  timestamp: string;
-  input: PatientFormValues;
-  output: AnalysisResult;
-};
 
 export default function Home() {
   const [streamData, setStreamData] = useState<AnalysisResult>({
@@ -81,9 +30,16 @@ export default function Home() {
     reasoning: "",
   });
   const [isStreaming, setIsStreaming] = useState(false);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [history, setHistory] = useState<HistoryItem<PatientFormValues>[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<string>("");
+  const [activeMode, setActiveMode] = useState<"form" | "testCases">("form");
+  const [testCases, setTestCases] = useState<TestCase[]>([]);
+  const [loadingTestCases, setLoadingTestCases] = useState(true);
+  const [mobileView, setMobileView] = useState<"form" | "results">("form");
+  const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
+
+  const isMobile = useMediaQuery("(max-width: 1023px)");
 
   const stepMessages: Record<string, string> = {
     validate_input: "Validating patient data...",
@@ -93,7 +49,6 @@ export default function Home() {
     cached_result: "Result found in cache...",
   };
 
-  // Ref for auto-scrolling the reasoning text
   const reasoningEndRef = useRef<HTMLDivElement>(null);
 
   const form = useForm<PatientFormValues>({
@@ -108,23 +63,24 @@ export default function Home() {
     },
   });
 
-  const {
-    fields: testFields,
-    append: appendTest,
-    remove: removeTest,
-  } = useFieldArray({
-    control: form.control,
-    name: "abnormal_tests",
-  });
-
-  const {
-    fields: symptomFields,
-    append: appendSymptom,
-    remove: removeSymptom,
-  } = useFieldArray({
-    control: form.control,
-    name: "symptoms",
-  });
+  useEffect(() => {
+    const loadTestCases = async () => {
+      try {
+        const response = await fetch("/test-data.json");
+        if (response.ok) {
+          const data: TestCasesData = await response.json();
+          setTestCases(data.test_cases);
+        } else {
+          console.error("Failed to load test cases");
+        }
+      } catch (error) {
+        console.error("Error loading test cases:", error);
+      } finally {
+        setLoadingTestCases(false);
+      }
+    };
+    loadTestCases();
+  }, []);
 
   useEffect(() => {
     const savedHistory = localStorage.getItem("lab_recommendation_history");
@@ -144,7 +100,7 @@ export default function Home() {
   }, [streamData.reasoning, isStreaming]);
 
   const saveToHistory = (input: PatientFormValues, output: AnalysisResult) => {
-    const newItem: HistoryItem = {
+    const newItem: HistoryItem<PatientFormValues> = {
       id: crypto.randomUUID(),
       timestamp: new Date().toISOString(),
       input,
@@ -164,7 +120,10 @@ export default function Home() {
     setStreamData({ recommendations: [], reasoning: "" });
     setCurrentStep("Initializing...");
 
-    // Format data for API
+    if (isMobile) {
+      setMobileView("results");
+    }
+
     const payload = {
       age: data.age,
       gender: data.gender,
@@ -281,7 +240,7 @@ export default function Home() {
     }
   };
 
-  const loadHistoryItem = (item: HistoryItem) => {
+  const loadHistoryItem = (item: HistoryItem<PatientFormValues>) => {
     form.reset({
       age: item.input.age,
       gender: item.input.gender,
@@ -309,418 +268,143 @@ export default function Home() {
     setCurrentStep("");
   };
 
+  const selectTestCase = async (testCase: TestCase) => {
+    const formData: PatientFormValues = {
+      age: testCase.api_input.age,
+      gender: testCase.api_input.gender === "male" ? "M" : "F",
+      abnormal_tests: testCase.api_input.abnormal_tests.map((test) => ({
+        value: test,
+      })),
+      symptoms: testCase.api_input.symptoms
+        ? testCase.api_input.symptoms
+            .split(", ")
+            .map((symptom) => ({ value: symptom.trim() }))
+        : [{ value: "" }],
+    };
+
+    form.reset(formData);
+
+    await onSubmit(formData);
+  };
+
   return (
-    <div className="h-screen bg-slate-50 dark:bg-slate-950 p-2 md:p-4 font-sans">
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 lg:grid-rows-1 gap-2 h-[calc(100vh-2rem)]">
-        <div className="lg:col-span-3 flex flex-col gap-2 h-full">
-          <Card className="flex-1 flex flex-col border border-slate-200 dark:border-slate-800 ring-0 overflow-hidden">
-            <CardHeader className="pb-4 bg-white dark:bg-slate-900 z-10">
-              <CardTitle className="flex items-center justify-between text-xl text-primary">
-                <div className="flex items-center gap-2">
-                  <SparkleIcon className="w-5 h-5 text-indigo-500" />
-                  AI Lab Consultant
-                </div>
-              </CardTitle>
-              <CardDescription>
-                Enter patient data to get localized lab test recommendations.
-              </CardDescription>
-              <Button
-                size="sm"
-                onClick={startNewAnalysis}
-                className="h-8 text-xs font-normal"
-              >
-                <PlusIcon className="w-3 h-3 mr-1" />
-                New Analysis
-              </Button>
-            </CardHeader>
+    <div className="h-screen bg-slate-50 dark:bg-slate-950 p-2 md:p-4 font-sans overflow-hidden">
+      <div className="max-w-7xl mx-auto h-[calc(100vh-1rem)] md:h-[calc(100vh-2rem)]">
+        {!isMobile ? (
+          <div className="grid grid-cols-12 gap-2 h-full">
+            <FormColumn
+              form={form}
+              isStreaming={isStreaming}
+              currentStep={currentStep}
+              onSubmit={onSubmit}
+              startNewAnalysis={startNewAnalysis}
+              activeMode={activeMode}
+              setActiveMode={setActiveMode}
+              testCases={testCases}
+              loadingTestCases={loadingTestCases}
+              selectTestCase={selectTestCase}
+              hasResults={
+                streamData.recommendations.length > 0 || !!streamData.reasoning
+              }
+              onViewResults={() => setMobileView("results")}
+            />
 
-            <ScrollArea className="flex-1 bg-white dark:bg-slate-900">
-              <CardContent className="space-y-6 pt-2">
-                <form
-                  id="recommendation-form"
-                  onSubmit={form.handleSubmit((data: PatientFormValues) =>
-                    onSubmit(data),
-                  )}
-                  className="space-y-6"
-                >
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Controller
-                        name="age"
-                        control={form.control}
-                        render={({ field, fieldState }) => (
-                          <Field data-invalid={fieldState.invalid}>
-                            <FieldLabel htmlFor="age">Age</FieldLabel>
-                            <Input
-                              id="age"
-                              type="number"
-                              {...field}
-                              aria-invalid={fieldState.invalid}
-                            />
-                            {fieldState.invalid && (
-                              <FieldError errors={[fieldState.error]} />
-                            )}
-                          </Field>
-                        )}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Controller
-                        name="gender"
-                        control={form.control}
-                        render={({ field, fieldState }) => (
-                          <Field data-invalid={fieldState.invalid}>
-                            <FieldLabel htmlFor="gender">Gender</FieldLabel>
-                            <Select
-                              onValueChange={(val) => field.onChange(val)}
-                              value={field.value}
-                              defaultValue={field.value}
-                            >
-                              <SelectTrigger
-                                className={`bg-slate-50 ${fieldState.invalid ? "border-red-500" : "border-slate-200"}`}
-                              >
-                                <SelectValue placeholder="Select" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="M">Male</SelectItem>
-                                <SelectItem value="F">Female</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            {fieldState.invalid && (
-                              <FieldError errors={[fieldState.error]} />
-                            )}
-                          </Field>
-                        )}
-                      />
-                    </div>
-                  </div>
+            <AnalysisResult
+              isStreaming={isStreaming}
+              currentStep={currentStep}
+              error={error}
+              streamData={streamData}
+              reasoningEndRef={reasoningEndRef}
+            />
 
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                        Abnormal Tests
-                      </Label>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => appendTest({ value: "" })}
-                        className="h-7 text-xs"
-                      >
-                        <PlusIcon className="w-3 h-3 mr-1" /> Add
-                      </Button>
-                    </div>
-                    <div className="space-y-2">
-                      {testFields.map((field, index) => (
-                        <div key={field.id} className="flex flex-col gap-1">
-                          <div className="flex gap-2 flex-1">
-                            <Controller
-                              name={`abnormal_tests.${index}.value` as const}
-                              control={form.control}
-                              render={({ field: f, fieldState }) => (
-                                <Field
-                                  className="flex-1"
-                                  data-invalid={fieldState.invalid}
-                                >
-                                  <Input
-                                    {...f}
-                                    placeholder="e.g. Hemoglobin 8.5 g/dL"
-                                    className={`bg-slate-50 text-sm ${fieldState.invalid ? "border-red-500 focus:border-red-500" : "border-slate-200"}`}
-                                    aria-invalid={fieldState.invalid}
-                                    aria-describedby={
-                                      fieldState.invalid
-                                        ? `abnormal_test_${index}_error`
-                                        : undefined
-                                    }
-                                  />
-                                  {fieldState.invalid && (
-                                    <FieldError errors={[fieldState.error]} />
-                                  )}
-                                </Field>
-                              )}
-                            />
-
-                            {testFields.length > 1 && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => removeTest(index)}
-                                className="shrink-0 text-slate-400 hover:text-red-500"
-                              >
-                                <XIcon className="w-4 h-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                      {form.formState.errors.abnormal_tests && (
-                        <p className="text-xs text-red-500 flex items-center gap-1">
-                          {form.formState.errors.abnormal_tests.message}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                        Symptoms
-                      </Label>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => appendSymptom({ value: "" })}
-                        className="h-7 text-xs"
-                      >
-                        <PlusIcon className="w-3 h-3 mr-1" /> Add
-                      </Button>
-                    </div>
-                    <div className="space-y-2">
-                      {symptomFields.map((field, index) => (
-                        <div key={field.id} className="flex flex-col gap-1">
-                          <div className="flex gap-2 flex-1">
-                            <Controller
-                              name={`symptoms.${index}.value` as const}
-                              control={form.control}
-                              render={({ field: f, fieldState }) => (
-                                <Field
-                                  className="flex-1"
-                                  data-invalid={fieldState.invalid}
-                                >
-                                  <Input
-                                    {...f}
-                                    placeholder="e.g. Fatigue, Dizziness"
-                                    className={`bg-slate-50 text-sm ${fieldState.invalid ? "border-red-500 focus:border-red-500" : "border-slate-200"}`}
-                                    aria-invalid={fieldState.invalid}
-                                    aria-describedby={
-                                      fieldState.invalid
-                                        ? `symptom_${index}_error`
-                                        : undefined
-                                    }
-                                  />
-                                  {fieldState.invalid && (
-                                    <FieldError errors={[fieldState.error]} />
-                                  )}
-                                </Field>
-                              )}
-                            />
-
-                            {symptomFields.length > 1 && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => removeSymptom(index)}
-                                className="shrink-0 text-slate-400 hover:text-red-500"
-                              >
-                                <XIcon className="w-4 h-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </form>
-              </CardContent>
-            </ScrollArea>
-
-            <CardFooter className="pt-4 border-t bg-slate-50 dark:bg-slate-900">
-              <Button
-                form="recommendation-form"
-                type="submit"
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition-all active:scale-[0.98]"
-                disabled={isStreaming}
-              >
-                {isStreaming ? (
-                  <span className="flex items-center gap-2">
-                    <SparkleIcon className="w-4 h-4 animate-spin" />{" "}
-                    {currentStep || "Analyzing..."}
-                  </span>
-                ) : (
-                  "Generate Recommendations"
-                )}
-              </Button>
-            </CardFooter>
-          </Card>
-        </div>
-
-        <Card className="lg:col-span-6 flex-1 flex flex-col border border-slate-200 dark:border-slate-800 ring-0 overflow-hidden bg-white/50 backdrop-blur-sm h-full">
-          <CardHeader className=" bg-white/80 dark:bg-slate-900/80 backdrop-blur">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg text-slate-900 dark:text-slate-100">
-                  Analysis Results
-                </CardTitle>
-                <CardDescription>
-                  {isStreaming ? (
-                    <span className="flex items-center gap-2 text-indigo-600 font-medium">
-                      <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" />
-                      {currentStep}
-                    </span>
-                  ) : (
-                    "AI-driven insights and test recommendations"
-                  )}
-                </CardDescription>
-              </div>
-              {isStreaming && (
-                <Badge
-                  variant="secondary"
-                  className="animate-pulse bg-indigo-100 text-indigo-700"
-                >
-                  Live Streaming
-                </Badge>
-              )}
-            </div>
-          </CardHeader>
-
-          <div className="flex-1 p-0 min-h-0 overflow-y-auto">
-            <div className="p-6 space-y-8">
-              {error && (
-                <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-600 flex items-start gap-3">
-                  <WarningCircleIcon className="w-5 h-5 mt-0.5 shrink-0" />
-                  <div className="text-sm font-medium">{error}</div>
-                </div>
-              )}
-
-              {!streamData.reasoning &&
-                !streamData.recommendations.length &&
-                !error && (
-                  <div className="h-64 flex flex-col items-center justify-center text-slate-400 gap-4">
-                    <SparkleIcon className="w-12 h-12 opacity-20" />
-                    <p className="text-sm font-medium">
-                      Results will appear here...
-                    </p>
-                  </div>
-                )}
-
-              {streamData.reasoning && (
-                <div className="space-y-3 animate-in fade-in duration-500">
-                  <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500 flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-indigo-500"></span>{" "}
-                    Clinical Reasoning
-                  </h3>
-                  <div className="text-sm md:text-base leading-relaxed text-slate-700 dark:text-slate-300 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 dark:bg-indigo-950/20 dark:border-indigo-900/50">
-                    {streamData.reasoning}
-                    <div ref={reasoningEndRef} />
-                  </div>
-                </div>
-              )}
-
-              {streamData.recommendations.length > 0 && (
-                <div className="space-y-4 animate-in slide-in-from-bottom-5 duration-700 delay-200">
-                  <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500 flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>{" "}
-                    Recommended Tests
-                  </h3>
-                  <div className="grid grid-cols-1 gap-4">
-                    {streamData.recommendations.map((rec, i) => (
-                      <Card
-                        key={i}
-                        className="border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow group"
-                      >
-                        <CardHeader className="pb-3 pt-5">
-                          <div className="flex items-start justify-between gap-4">
-                            <div>
-                              <CardTitle className="text-lg font-semibold text-slate-900 dark:text-white group-hover:text-indigo-600 transition-colors">
-                                {rec.test_name}
-                              </CardTitle>
-                              <div className="flex gap-2 mt-2">
-                                <Badge
-                                  variant={
-                                    rec.priority.toLowerCase() === "high"
-                                      ? "destructive"
-                                      : "secondary"
-                                  }
-                                  className="uppercase text-[10px] tracking-wider font-bold"
-                                >
-                                  {rec.priority} Priority
-                                </Badge>
-                                <Badge
-                                  variant="outline"
-                                  className="text-[10px] text-slate-500"
-                                >
-                                  Confidence:{" "}
-                                  {(rec.confidence * 100).toFixed(0)}%
-                                </Badge>
-                              </div>
-                            </div>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="pb-4 text-sm text-slate-600 dark:text-slate-400 space-y-2">
-                          <p className="font-medium text-slate-900 dark:text-slate-200">
-                            {rec.clinical_indication}
-                          </p>
-                          <p className="border-l-2 border-slate-200 pl-3 italic text-slate-500">
-                            {rec.reasoning}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            <SessionHistory
+              history={history}
+              clearHistory={clearHistory}
+              loadHistoryItem={loadHistoryItem}
+            />
           </div>
-        </Card>
-
-        <Card className="lg:col-span-3 h-full flex flex-col border border-slate-200 dark:border-slate-800 ring-0 overflow-hidden bg-white dark:bg-slate-900">
-          <CardHeader className="bg-white dark:bg-slate-900">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base text-slate-900 dark:text-slate-100">
-                Session History
-              </CardTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 text-xs text-slate-400 hover:text-slate-600"
-                onClick={clearHistory}
-              >
-                <ArrowCounterClockwiseIcon className="w-3 h-3 mr-1" /> Clear
-              </Button>
-            </div>
-          </CardHeader>
-          <div className="flex-1 p-0 min-h-0 overflow-y-auto">
-            <div className="p-2 space-y-1">
-              {history.length === 0 ? (
-                <div className="text-center py-6 text-xs text-slate-400">
-                  No recent history
-                </div>
-              ) : (
-                history.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => loadHistoryItem(item)}
-                    className="w-full text-left p-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 flex items-center justify-between group"
+        ) : (
+          <div className="h-full relative">
+            {mobileView === "form" ? (
+              <FormColumn
+                form={form}
+                isStreaming={isStreaming}
+                currentStep={currentStep}
+                onSubmit={onSubmit}
+                startNewAnalysis={startNewAnalysis}
+                activeMode={activeMode}
+                setActiveMode={setActiveMode}
+                testCases={testCases}
+                loadingTestCases={loadingTestCases}
+                selectTestCase={selectTestCase}
+                hasResults={
+                  streamData.recommendations.length > 0 ||
+                  !!streamData.reasoning
+                }
+                onViewResults={() => setMobileView("results")}
+              />
+            ) : (
+              <div className="h-full flex flex-col">
+                <div className="shrink-0 p-2 bg-white dark:bg-slate-900 border-b">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMobileView("form")}
+                    className="gap-2"
                   >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300">
-                        <span>
-                          {item.input.age}y / {item.input.gender}
-                        </span>
-                        <span className="text-slate-300">•</span>
-                        <span className="truncate">
-                          {new Date(item.timestamp).toLocaleTimeString()}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-500 truncate mt-0.5">
-                        {item.input.abnormal_tests.length} tests,{" "}
-                        {item.input.symptoms.length} symptoms
-                      </div>
-                    </div>
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Badge variant="outline" className="text-[10px]">
-                        Load
-                      </Badge>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
+                    <ArrowLeftIcon className="w-4 h-4" />
+                    Back to Form
+                  </Button>
+                </div>
+                <div className="flex-1 min-h-0">
+                  <AnalysisResult
+                    isStreaming={isStreaming}
+                    currentStep={currentStep}
+                    error={error}
+                    streamData={streamData}
+                    reasoningEndRef={reasoningEndRef}
+                  />
+                </div>
+              </div>
+            )}
+
+            <Button
+              onClick={() => setHistoryDrawerOpen(true)}
+              className="fixed bottom-4 right-4 h-14 w-14 rounded-full shadow-lg bg-indigo-600 hover:bg-indigo-700 z-50"
+              size="icon"
+            >
+              <div className="relative">
+                <ClockCounterClockwiseIcon className="w-6 h-6" />
+                {history.length > 0 && (
+                  <Badge className="absolute -top-6 -right-6 h-5 min-w-5 flex items-center justify-center p-1 bg-red-500 text-white text-xs">
+                    {history.length}
+                  </Badge>
+                )}
+              </div>
+            </Button>
+            <Sheet open={historyDrawerOpen} onOpenChange={setHistoryDrawerOpen}>
+              <SheetContent side="bottom" className="h-[80vh]">
+                <SheetHeader>
+                  <SheetTitle>Session History</SheetTitle>
+                </SheetHeader>
+                <div className="mt-4 h-[calc(100%-4rem)] overflow-hidden">
+                  <SessionHistory
+                    history={history}
+                    clearHistory={() => {
+                      clearHistory();
+                      setHistoryDrawerOpen(false);
+                    }}
+                    loadHistoryItem={(item) => {
+                      loadHistoryItem(item);
+                      setHistoryDrawerOpen(false);
+                      setMobileView("results");
+                    }}
+                  />
+                </div>
+              </SheetContent>
+            </Sheet>
           </div>
-        </Card>
+        )}
       </div>
     </div>
   );

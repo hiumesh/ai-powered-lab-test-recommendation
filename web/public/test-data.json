@@ -1,0 +1,103 @@
+{
+  "test_cases": [
+    {
+      "source_file": "case1.txt",
+      "patient_name": "HAMDAN SAIF AL RUBAIE",
+      "api_input": {
+        "age": 69,
+        "gender": "male",
+        "abnormal_tests": [
+          "Abnormalities of WBCs: Leucopenia noted.",
+          "HDL Cholesterol: 35.00 mg/dL (normal: 40.000-60.000)",
+          "Fasting Blood Sugar: 120.00 mg/dL (normal: 70.000-110.000)",
+          "HbA1c: 6.0 % (normal: 4.100-5.700)",
+          "Terminated Due To:: Attained THR",
+          "Impression :: NEGATIVE FOR INDUCIBLE ISCHEMIA."
+        ],
+        "symptoms": "frequent infections, shortness of breath, chest discomfort, fatigue, weakness"
+      }
+    },
+    {
+      "source_file": "case12.txt",
+      "patient_name": "HAMDAN SAIF AL RUBAIE",
+      "api_input": {
+        "age": 69,
+        "gender": "male",
+        "abnormal_tests": [
+          "Abnormalities of WBCs: Leucopenia noted.",
+          "Creatinine: 1.80 mg/dL (normal: 0.600-1.300)",
+          "Terminated Due To:: Attained THR",
+          "Impression :: NEGATIVE FOR INDUCIBLE ISCHEMIA."
+        ],
+        "symptoms": "swelling in legs, frequent infections, decreased urine output, fatigue, weakness"
+      }
+    },
+    {
+      "source_file": "case2.txt",
+      "patient_name": "HAMDAN SAIF AL RUBAIE",
+      "api_input": {
+        "age": 69,
+        "gender": "male",
+        "abnormal_tests": [
+          "Abnormalities of WBCs: Leucopenia noted.",
+          "Total Cholesterol: 216.00 mg/dL (normal: 0.000-200.000)",
+          "T4 (THYROXINE): 3.4 ug/dL (normal: 4.870-11.720)",
+          "TSH (Thyroid Stimulating Hormone): 5.04 uIU/mL (normal: 0.350-4.940)",
+          "Terminated Due To:: Attained THR",
+          "Impression :: NEGATIVE FOR INDUCIBLE ISCHEMIA."
+        ],
+        "symptoms": "mood changes, frequent infections, weight changes, fatigue, weakness"
+      }
+    },
+    {
+      "source_file": "case3.txt",
+      "patient_name": "HAMDAN SAIF AL RUBAIE",
+      "api_input": {
+        "age": 69,
+        "gender": "male",
+        "abnormal_tests": [
+          "Haemoglobin (Hb): 11.00 g/dL (normal: 13.000-17.000)",
+          "Abnormalities of WBCs: Leucopenia noted.",
+          "Vitamin D (25-Hydroxy): 26.61 ng/mL (normal: 30.000-100.000)",
+          "Vitamin B12: 171.00 pg/mL (normal: 180.000-914.000)",
+          "Terminated Due To:: Attained THR",
+          "Impression :: NEGATIVE FOR INDUCIBLE ISCHEMIA."
+        ],
+        "symptoms": "frequent infections, fatigue, weakness"
+      }
+    },
+    {
+      "source_file": "case4.txt",
+      "patient_name": "HAMDAN SAIF AL RUBAIE",
+      "api_input": {
+        "age": 69,
+        "gender": "male",
+        "abnormal_tests": [
+          "Abnormalities of WBCs: Leucopenia noted.",
+          "SGOT: 45.00 IU/L (normal: 10.000-40.000)",
+          "SGPT: 45.00 IU/L (normal: 10.000-40.000)",
+          "GGTP (GAMMA GLUTAMYL TRANSFERASE): 56.00 IU/L (normal: 7.000-50.000)",
+          "Terminated Due To:: Attained THR",
+          "Impression :: NEGATIVE FOR INDUCIBLE ISCHEMIA."
+        ],
+        "symptoms": "frequent infections, fatigue, weakness"
+      }
+    },
+    {
+      "source_file": "case5.txt",
+      "patient_name": "HAMDAN SAIF AL RUBAIE",
+      "api_input": {
+        "age": 69,
+        "gender": "male",
+        "abnormal_tests": [
+          "Abnormalities of WBCs: Leucopenia noted.",
+          "HbA1c: 6.0 % (normal: 4.100-5.700)",
+          "Terminated Due To:: Attained THR",
+          "Impression :: NEGATIVE FOR INDUCIBLE ISCHEMIA."
+        ],
+        "symptoms": "frequent infections, fatigue, weakness"
+      }
+    }
+  ],
+  "total_cases": 6
+}
